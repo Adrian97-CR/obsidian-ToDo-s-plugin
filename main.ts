@@ -1,6 +1,4 @@
-import { read } from 'fs';
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, ListedFiles } from 'obsidian';
-import { arrayBuffer } from 'stream/consumers';
 
 // Remember to rename these classes and interfaces!
 
@@ -44,9 +42,8 @@ export default class toDosPlugin extends Plugin {
 	};
 	checkCoincidence(notes:Note[],name:string, i:number):boolean
 	{
-		if (notes[i]!==undefined) {
-			console.log(notes[i].name,name,1);
-			return notes[i].name===name || this.checkCoincidence(notes,name,i+1);
+		if (typeof notes[i] !== 'undefined') {
+			return notes[i].name.substring(0,name.length)===name || this.checkCoincidence(notes,name,i+1);
 		}
 		return false; // acomodoar returns recursivos para filtrar las que se eliminan
 	}
@@ -56,20 +53,28 @@ export default class toDosPlugin extends Plugin {
 		let newToDos = toDos[0]+toDos[1]+toDos[2];
 		let auxNotes:Note[] = [];
 		let cont = 0;
-		let endBand = false;
-		for (let i = 3; i < toDos.length; i++) {   //  esta entrando aqui sin insertar las notas si son las ultimas tareas
+		for (let i = 3; i < toDos.length; i++) { /////////////////    no se estan detectando coincidencias en el filter
 			//ademas está tomando -1 dia en las fechas en toDos no se porque
 			if (toDos[i].substring(0,1) === '#') {   //  entra a Completadas
-				endBand = true;
-				notes.map((nte:Note)=>{newToDos+=nte.name.substring(0,nte.name.length-3)+'|'+nte.objective[0]+'|'+nte.deadline.getFullYear()+'-'+(nte.deadline.getMonth()+1)+'-'+nte.deadline.getDate()+'|'+'|'+'\n';});
+				notes.map((nte:Note)=>{
+					newToDos+='[[01'+nte.name.substring(2,nte.name.length-3)+']]|'+nte.objective[0]+'|'+nte.deadline.getFullYear()+'-'+(nte.deadline.getMonth()+1)+'-'+nte.deadline.getDate()+'|'+'|'+'\n';
+					if (nte.name.substring(0,2) === '10') {
+						auxNotes.push(nte);					
+					}
+				});
 				newToDos = newToDos + toDos[i]+toDos[i+1]+toDos[i+2]
 				i += 2;
-
-				////////////////           segun yo esto elimina las notas recuperadas/ comprobar eliminar completadas, 
+				console.log(auxNotes)
 				toDos = toDos.slice(i).filter((line:string)=>{
-					let spl = line[i].split('|');
-					return !this.checkCoincidence(auxNotes,spl[1],0)
-				})
+					let spl = line.split('|');
+					let x = this.checkCoincidence(auxNotes,spl[1].substring(2,spl[1].length-2),0);
+					if (x) {
+						console.log(line)
+					}
+					return !x;
+					//return !this.checkCoincidence(auxNotes,spl[1],0)
+				});
+				console.log(toDos);
 				toDos.slice(1).map((line)=>{newToDos+=line});
 				newToDos.substring(0,toDos.length-3)
 				break;
@@ -79,11 +84,11 @@ export default class toDosPlugin extends Plugin {
 			let line = toDos[i].split('|');
 			while(cont<notes.length){ //  agrega las notas con prioridad de tiempo
 				if (notes[cont].deadline.getTime() < (new Date(line[2])).getTime()) {
-					newToDos += notes[cont].name.substring(0,notes[cont].name.length-3)+'|'+notes[cont].objective[0]+'|'+notes[cont].deadline.getFullYear()+'-'+(notes[cont].deadline.getMonth()+1)+'-'+notes[cont].deadline.getDate()+'|'+'|'+'\n';
+					newToDos += '[[01'+notes[cont].name.substring(2,notes[cont].name.length-3)+']]|'+notes[cont].objective[0]+'|'+notes[cont].deadline.getFullYear()+'-'+(notes[cont].deadline.getMonth()+1)+'-'+notes[cont].deadline.getDate()+'|'+'|'+'\n';
 					if (notes[cont].name.substring(0,2) === '10') {
-						auxNotes.concat(notes.splice(cont,1));					
+						auxNotes.concat(notes.splice(cont,1));
 					}
-					notes.splice(cont,1);
+					else	notes.splice(cont,1);
 					cont--;
 					if (notes.length==0) {
 						while(toDos[i].substring(0,1) !== '#'){
@@ -103,8 +108,8 @@ export default class toDosPlugin extends Plugin {
 			
 			
 		}// hacer test de todo
-		
 		console.log(newToDos);
+		return newToDos;
 	}
 	// while(cont<notes.length){
 	// 	let line = toDos[i].split('|');
@@ -122,15 +127,18 @@ export default class toDosPlugin extends Plugin {
 		this.app.vault.adapter.list("ToDo's").then(async(reader:ListedFiles)=>{
 			let listToDos:Note[] = [];
 			let listToUpdate:Note[] = [];
-			reader.files.forEach((fileName:string) => {
-				fileName = fileName.split('/')[1];
+			let newTaskFileName:string[] = [];
+			reader.files.forEach((path:string) => {
+				let fileName = path.split('/')[1];
 				// Busca la tarea nueva sin insertar para insertar en todo's
 				if(fileName.substring(0,2) === '00'){
 					listToDos.push({name:fileName,status:"",deadline:new Date,objective:[""],insert:true});
+					newTaskFileName.push(path);
 				}
 				// busca los archivos que tengan la tarea completada con objetivo nuevo para insertar en todo's
 				else if(fileName.substring(0,2) === '10'){
 					listToDos.push({name:fileName,status:"",deadline:new Date,objective:[""],insert:true});
+					newTaskFileName.push(path);
 				}
 				// Busca notas con cambios para actualizar avance(listo)
 				else if(fileName.substring(0,2) === '01'){    //////////////           pendiente
@@ -143,9 +151,12 @@ export default class toDosPlugin extends Plugin {
 					let reader = await this.app.vault.adapter.read("ToDo's/"+listToDos[i].name);
 					this.getNewTask(reader, listToDos[i]);
 				}
-				listToDos.sort(this.sortFunction);
-				this.toDosUpdate(listToDos);
 
+				listToDos.sort(this.sortFunction)
+				newTaskFileName.forEach(file => {
+					this.app.vault.adapter.rename(file, file.replace(/\/\d0/,'/01'));
+				});
+				this.app.vault.adapter.write("ToDo's.md",await this.toDosUpdate(listToDos));
 			}
 			
 		})
