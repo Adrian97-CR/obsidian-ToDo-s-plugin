@@ -28,6 +28,7 @@ export default class toDosPlugin extends Plugin {
 		let act:string = '';
 		let i = note.objective.length+2;
 		let now = new Date(Date().replace('GMT+0000','GMT-0600'))
+		let auxObj = note.objective[0];
 		note.objective = note.objective.filter((obj:string)=>{
 			let band = -1!=obj.search(/!listo/);
 			if(band){
@@ -36,9 +37,13 @@ export default class toDosPlugin extends Plugin {
 			else{
 				act+=obj+'\n'
 			}
-			return band;
+			return !band;
 		});
-		note.delete = note.objective.length==0;
+		if(note.objective.length==0){
+			note.delete = true;
+			note.status = auxObj.replace(/!listo/,'');
+
+		}
 		let line = file.split(/\n/);
 		file = note.deadline.getFullYear()+'-'+(note.deadline.getMonth()+1)+'-'+note.deadline.getDate()+'\n'+line[1]+'\n'+act;
 		while(true){
@@ -93,11 +98,24 @@ export default class toDosPlugin extends Plugin {
 		let toDos = (await this.app.vault.adapter.read("ToDo's.md")).split('\n');
 		toDos.forEach((line:string, index)=>{toDos[index] = line+'\n'})
 		let newToDos = toDos[0]+toDos[1]+toDos[2];
+		let auxNotes:string[] = [];
 		let compTask = '';
 		let cont = 0;
-		for (let i = 3; i < toDos.length; i++) {
+		let now = new Date(Date().replace('GMT+0000','GMT-0600'))
+		notes = notes.filter((task:Note)=>{
+			let name = task.name.substring(0,task.name.length-3);
+			if (task.delete) {
+				compTask+=now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate()+'|[['+name+']]|'+task.status+'\n'
+			}
+			auxNotes.push(task.name.substring(2,task.name.length-3));
+			return !task.delete;
+		});
+		for (let i = 3; true; i++) {
 			//ademas está tomando -1 dia en las fechas en toDos no se porque
 			if (toDos[i].substring(0,1) === '#') {   //  entra a Completadas
+				notes.map((nte:Note)=>{
+					newToDos+='[[01'+nte.name.substring(2,nte.name.length-3)+']]|'+nte.objective[0]+'|'+nte.deadline.getFullYear()+'-'+(nte.deadline.getMonth()+1)+'-'+nte.deadline.getDate()+'|'+'|'+'\n';
+				});
 				newToDos += toDos[i]+toDos[i+1]+toDos[i+2]+compTask;
 				i += 3; 
 				toDos.slice(i).map((line)=>{newToDos+=line});
@@ -106,52 +124,41 @@ export default class toDosPlugin extends Plugin {
 			}
 			cont = 0;
 			let line = toDos[i].split('|');
+			let auxLine = toDos[i];
 			let name = line[0].substring(4,line[0].length-2)
-			while(cont<notes.length){ //  agrega las notas con prioridad de tiempo 
-				if (!notes[cont].delete && notes[cont].deadline.getTime() < (new Date(line[2])).getTime()) {
-					newToDos += '[[01'+notes[cont].name.substring(2,notes[cont].name.length-3)+']]|'+notes[cont].objective[0]+'|'+notes[cont].deadline.getFullYear()+'-'+(notes[cont].deadline.getMonth()+1)+'-'+notes[cont].deadline.getDate()+'|'+'|'+'\n';
-					notes[cont].delBand++;
-					if(notes[cont].delBand == 2){
-						notes.splice(cont,1);
-						cont--;
-						if (notes.length==0) {
-							while(toDos[i].substring(0,1) !== '#'){
-								newToDos += toDos[i]
-								i++;
-							}
-							i--;
-							break;
-						}
-					}
-				}
-				if (notes[cont].name.substring(2,notes[cont].name.length-3)===name) {
-					notes[cont].delBand++;
-					if (notes[cont].delete) {
-						compTask += '[[12'+name+']]|'+'\n';
-						notes.splice(cont,1);
-						cont--;
-					}
-					else if(notes[cont].delBand == 2){
-						notes.splice(cont,1);
-						cont--;
-					}
-					if (notes.length==0) {
-						while(toDos[i].substring(0,1) !== '#'){
-							newToDos += toDos[i]
-							i++;
-						}
-						i--;
-					}
-					break;		
-				}
-				cont++;
-				if(cont == notes.length) {
-					newToDos += toDos[i];
+			let resDel = false;
+			while(cont<auxNotes.length){
+				if (auxNotes[cont]===name) {
+					auxNotes.splice(cont,1);
+					toDos.splice(i,1);
+					i--;
+					resDel = true;
 					break;
 				}
+				else{
+					if(notes.length==0){
+						newToDos += toDos[i];
+					}
+				}
+				cont++;
 			}
-			
-			
+			cont = 0;
+			while(cont<notes.length){
+				if (notes[cont].deadline.getTime() < (new Date(line[2])).getTime()) {
+					resDel = false;
+					newToDos += '[[01'+notes[cont].name.substring(2,notes[cont].name.length-3)+']]|'+notes[cont].objective[0]+'|'+notes[cont].deadline.getFullYear()+'-'+(notes[cont].deadline.getMonth()+1)+'-'+notes[cont].deadline.getDate()+'|'+'|'+'\n';
+					notes.splice(cont,1);
+					cont--;
+				}
+				else {
+					if(!resDel){
+						newToDos += auxLine;
+					}
+					break;
+				}
+				cont++;
+			}
+			cont = 0;
 		}// hacer test de todo
 		console.log(newToDos);
 		return newToDos;
@@ -172,14 +179,14 @@ export default class toDosPlugin extends Plugin {
 					}
 				});
 				newToDos = newToDos + toDos[i]+toDos[i+1]+toDos[i+2]
-				i += 2;
+				i += 3;
 				toDos = toDos.slice(i).filter((line:string)=>{
 					let spl = line.split('|');///////////////////////////////               console.log(spl[1].substring(2,spl[1].length-2))
 					let x = this.checkCoincidence(auxNotes,spl[1].substring(2,spl[1].length-2),0);
 					return !x;
 				});
 				console.log(toDos);
-				toDos.slice(1).map((line)=>{newToDos+=line}); // por que 1?
+				toDos.map((line)=>{newToDos+=line});
 				newToDos.substring(0,toDos.length-3)
 				break;
 				
@@ -215,17 +222,6 @@ export default class toDosPlugin extends Plugin {
 		console.log(newToDos);
 		return newToDos;
 	}
-	// while(cont<notes.length){
-	// 	let line = toDos[i].split('|');
-	// 	if (line[0].substring(3, auxNote.name.length-1) === auxNote.name.substring(2)) {  //  que sea 
-	// 		newToDos = newToDos+line[0]+'|'+auxNote.deadline.getDate()+'|\n';
-	// 		break;
-	// 	}
-	// 	else if (auxNote.deadline.getTime() < (new Date(line[2])).getTime()) {
-	// 		break;
-	// 	}
-	// 	else newToDos += toDos[i];
-	// }
 
 	
 	handleScan(){
