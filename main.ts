@@ -11,7 +11,8 @@ interface Note {
 	deadline:Date;
 	status:string;
 	objective:string[],
-	delete?:boolean
+	delete?:boolean;
+	delBand?:number;
 }
 const DEFAULT_SETTINGS: ToDosSettings = {
 	mySetting: 'default'
@@ -28,7 +29,7 @@ export default class toDosPlugin extends Plugin {
 		let i = note.objective.length+2;
 		let now = new Date(Date().replace('GMT+0000','GMT-0600'))
 		note.objective = note.objective.filter((obj:string)=>{
-			let band = -1==obj.search(/!listo/);
+			let band = -1!=obj.search(/!listo/);
 			if(band){
 				comp+=obj.replace(/!listo/,'')+'|[['+now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate()+']]\n';
 			}
@@ -92,57 +93,62 @@ export default class toDosPlugin extends Plugin {
 		let toDos = (await this.app.vault.adapter.read("ToDo's.md")).split('\n');
 		toDos.forEach((line:string, index)=>{toDos[index] = line+'\n'})
 		let newToDos = toDos[0]+toDos[1]+toDos[2];
-		let auxNotes:Note[] = [];
+		let compTask = '';
 		let cont = 0;
 		for (let i = 3; i < toDos.length; i++) {
 			//ademas está tomando -1 dia en las fechas en toDos no se porque
 			if (toDos[i].substring(0,1) === '#') {   //  entra a Completadas
-				notes.map((nte:Note)=>{
-					newToDos+='[[01'+nte.name.substring(2,nte.name.length-3)+']]|'+nte.objective[0]+'|'+nte.deadline.getFullYear()+'-'+(nte.deadline.getMonth()+1)+'-'+nte.deadline.getDate()+'|'+'|'+'\n';
-					if (nte.name.substring(0,2) === '10') {
-						auxNotes.push(nte);					
-					}
-				});
-				newToDos = newToDos + toDos[i]+toDos[i+1]+toDos[i+2]
-				i += 2;
-				toDos = toDos.slice(i).filter((line:string)=>{
-					let spl = line.split('|');
-					let x = this.checkCoincidence(auxNotes,spl[1].substring(2,spl[1].length-2),0);
-					if (x) {
-						console.log(line)
-					}
-					return !x;
-				});
-				console.log(toDos);
-				toDos.slice(1).map((line)=>{newToDos+=line});
+				newToDos += toDos[i]+toDos[i+1]+toDos[i+2]+compTask;
+				i += 3; 
+				toDos.slice(i).map((line)=>{newToDos+=line});
 				newToDos.substring(0,toDos.length-3)
 				break;
-				
 			}
 			cont = 0;
 			let line = toDos[i].split('|');
-			while(cont<notes.length){ //  agrega las notas con prioridad de tiempo
-				if (notes[cont].deadline.getTime() < (new Date(line[2])).getTime()) {
+			let name = line[0].substring(4,line[0].length-2)
+			while(cont<notes.length){ //  agrega las notas con prioridad de tiempo 
+				if (!notes[cont].delete && notes[cont].deadline.getTime() < (new Date(line[2])).getTime()) {
 					newToDos += '[[01'+notes[cont].name.substring(2,notes[cont].name.length-3)+']]|'+notes[cont].objective[0]+'|'+notes[cont].deadline.getFullYear()+'-'+(notes[cont].deadline.getMonth()+1)+'-'+notes[cont].deadline.getDate()+'|'+'|'+'\n';
-					if (notes[cont].name.substring(0,2) === '10') {
-						auxNotes.concat(notes.splice(cont,1));
+					notes[cont].delBand++;
+					if(notes[cont].delBand == 2){
+						notes.splice(cont,1);
+						cont--;
+						if (notes.length==0) {
+							while(toDos[i].substring(0,1) !== '#'){
+								newToDos += toDos[i]
+								i++;
+							}
+							i--;
+							break;
+						}
 					}
-					else	notes.splice(cont,1);
-					cont--;
+				}
+				if (notes[cont].name.substring(2,notes[cont].name.length-3)===name) {
+					notes[cont].delBand++;
+					if (notes[cont].delete) {
+						compTask += '[[12'+name+']]|'+'\n';
+						notes.splice(cont,1);
+						cont--;
+					}
+					else if(notes[cont].delBand == 2){
+						notes.splice(cont,1);
+						cont--;
+					}
 					if (notes.length==0) {
 						while(toDos[i].substring(0,1) !== '#'){
 							newToDos += toDos[i]
 							i++;
 						}
 						i--;
-						break;
 					}
+					break;		
 				}
-				else {
+				cont++;
+				if(cont == notes.length) {
 					newToDos += toDos[i];
 					break;
 				}
-				cont++;
 			}
 			
 			
@@ -150,7 +156,6 @@ export default class toDosPlugin extends Plugin {
 		console.log(newToDos);
 		return newToDos;
 	}
-
 	async toDosUpdate00_10(notes:Note[]) {
 		let toDos = (await this.app.vault.adapter.read("ToDo's.md")).split('\n');
 		toDos.forEach((line:string, index)=>{toDos[index] = line+'\n'})
@@ -169,15 +174,12 @@ export default class toDosPlugin extends Plugin {
 				newToDos = newToDos + toDos[i]+toDos[i+1]+toDos[i+2]
 				i += 2;
 				toDos = toDos.slice(i).filter((line:string)=>{
-					let spl = line.split('|');
+					let spl = line.split('|');///////////////////////////////               console.log(spl[1].substring(2,spl[1].length-2))
 					let x = this.checkCoincidence(auxNotes,spl[1].substring(2,spl[1].length-2),0);
-					if (x) {
-						console.log(line)
-					}
 					return !x;
 				});
 				console.log(toDos);
-				toDos.slice(1).map((line)=>{newToDos+=line});
+				toDos.slice(1).map((line)=>{newToDos+=line}); // por que 1?
 				newToDos.substring(0,toDos.length-3)
 				break;
 				
@@ -225,11 +227,13 @@ export default class toDosPlugin extends Plugin {
 	// 	else newToDos += toDos[i];
 	// }
 
+	
 	handleScan(){
 		this.app.vault.adapter.list("ToDo's").then(async(reader:ListedFiles)=>{
 			let listToDos:Note[] = [];
 			let listToUpdate:Note[] = [];
 			let newTaskFileName:string[] = [];
+			let toDelete = 0;
 			reader.files.forEach((path:string) => {
 				let fileName = path.split('/')[1];
 				// Busca la tarea nueva sin insertar para insertar en todo's
@@ -244,7 +248,7 @@ export default class toDosPlugin extends Plugin {
 				}
 				// Busca notas con cambios para actualizar avance(listo)
 				else if(fileName.substring(0,2) === '11'){
-					listToUpdate.push({name:fileName,status:"",deadline:new Date,objective:[""],delete:false});
+					listToUpdate.push({name:fileName,status:"",deadline:new Date,objective:[""],delete:false,delBand:0});
 				}
 			});
 			// extrae la info de las notas para actualizar toDos
@@ -265,18 +269,22 @@ export default class toDosPlugin extends Plugin {
 					let reader = await this.app.vault.adapter.read("ToDo's/"+listToUpdate[i].name);
 					this.getNewTask(reader, listToUpdate[i]);
 					let newNote = this.createNewTaskNote(listToUpdate[i],reader);
-					this.app.vault.adapter.write("ToDo's/"+listToUpdate[i].name, newNote);
+					console.log(newNote)
+					//this.app.vault.adapter.write("ToDo's/"+listToUpdate[i].name, newNote);
 					if (listToUpdate[i].delete) {
-						this.app.vault.adapter.rename("ToDo's/"+listToUpdate[i].name, listToUpdate[i].name.replace(/\/11/,'/12'));
+						toDelete++;
+						continue;
+						this.app.vault.adapter.rename("ToDo's/"+listToUpdate[i].name, "ToDo's/"+listToUpdate[i].name.replace(/\/11/,'/12'));
 						//actualizar contenido de la nota
 					}
 					else{
-						this.app.vault.adapter.rename("ToDo's/"+listToUpdate[i].name, listToUpdate[i].name.replace(/\/11/,'/01'));
+						continue;
+						this.app.vault.adapter.rename("ToDo's/"+listToUpdate[i].name, "ToDo's/"+listToUpdate[i].name.replace(/\/11/,'/01'));
 					}
 
 				}
 				listToUpdate.sort(this.sortFunction)
-				this.toDosUpdate11();
+				this.toDosUpdate11(listToUpdate);
 			}
 			
 		})
