@@ -103,11 +103,11 @@ export default class toDosPlugin extends Plugin {
 		let cont = 0;
 		let now = new Date(Date().replace('GMT+0000','GMT-0600'))
 		notes = notes.filter((task:Note)=>{
-			let name = task.name.substring(0,task.name.length-3);
+			let name = task.name.substring(2,task.name.length-3);
 			if (task.delete) {
-				compTask+=now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate()+'|[['+name+']]|'+task.status+'\n'
+				compTask+=now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate()+'|[[12'+name+']]|'+task.status+'\n'
 			}
-			auxNotes.push(task.name.substring(2,task.name.length-3));
+			auxNotes.push(name);
 			return !task.delete;
 		});
 		for (let i = 3; true; i++) {
@@ -160,7 +160,6 @@ export default class toDosPlugin extends Plugin {
 			}
 			cont = 0;
 		}// hacer test de todo
-		console.log(newToDos);
 		return newToDos;
 	}
 	async toDosUpdate00_10(notes:Note[]) {
@@ -265,22 +264,19 @@ export default class toDosPlugin extends Plugin {
 					let reader = await this.app.vault.adapter.read("ToDo's/"+listToUpdate[i].name);
 					this.getNewTask(reader, listToUpdate[i]);
 					let newNote = this.createNewTaskNote(listToUpdate[i],reader);
-					console.log(newNote)
-					//this.app.vault.adapter.write("ToDo's/"+listToUpdate[i].name, newNote);
+					this.app.vault.adapter.write("ToDo's/"+listToUpdate[i].name, newNote);
 					if (listToUpdate[i].delete) {
 						toDelete++;
-						continue;
 						this.app.vault.adapter.rename("ToDo's/"+listToUpdate[i].name, "ToDo's/"+listToUpdate[i].name.replace(/\/11/,'/12'));
 						//actualizar contenido de la nota
 					}
 					else{
-						continue;
 						this.app.vault.adapter.rename("ToDo's/"+listToUpdate[i].name, "ToDo's/"+listToUpdate[i].name.replace(/\/11/,'/01'));
 					}
 
 				}
 				listToUpdate.sort(this.sortFunction)
-				this.toDosUpdate11(listToUpdate);
+				this.app.vault.adapter.write("ToDo's.md",await this.toDosUpdate11(listToUpdate));
 			}
 			
 		})
