@@ -75,7 +75,7 @@ export default class toDosPlugin extends Plugin {
 		}
 		i++;
 		note.objective = auxTask;
-		note.status = reader[i];
+		note.status = reader[i].substring(0,1)!=='#'?reader[i]:'';
 		return
 	}
 
@@ -118,10 +118,10 @@ export default class toDosPlugin extends Plugin {
 		for (let i = 3; true; i++) {
 			if (toDos[i].substring(0,1) === '#') {   //  entra a Completadas
 				notes.map((nte:Note)=>{
-					newToDos+='[[01'+nte.name.substring(2,nte.name.length-3)+']]|'+nte.objective[0]+'|'+nte.deadline.getFullYear()+'-'+(nte.deadline.getMonth()+1)+'-'+nte.deadline.getDate()+'|'+'|'+'\n';
+					newToDos+='[[01'+nte.name.substring(2,nte.name.length-3)+']]|'+nte.objective[0]+'|'+nte.status+'|'+nte.deadline.getFullYear()+'-'+(nte.deadline.getMonth()+1)+'-'+nte.deadline.getDate()+'|'+'\n';
 				});
 				newToDos += toDos[i]+toDos[i+1]+toDos[i+2]+compTask;
-				i += 3; 
+				i += 3;
 				toDos.slice(i).map((line)=>{
 					if(line.length>4)
 						newToDos+=line;
@@ -133,13 +133,15 @@ export default class toDosPlugin extends Plugin {
 			cont2 = 0;
 			let line = toDos[i].split('|');
 			let name = line[0].substring(4,line[0].length-2);
+			bandIns = false;
 			while((cont<auxNotes.length || cont2<notes.length)&&toDos[i].substring(0,1) !== '#'){
 				if (auxNotes.length>cont && auxNotes[cont]===name) {
 					bandIns = true;
 					break
 				}
-				else if(notes.length>cont2 && notes[cont2].deadline.getTime() < (new Date(line[2])).getTime()){
-					newToDos += '[[01'+notes[cont2].name.substring(2,notes[cont2].name.length-3)+']]|'+notes[cont2].objective[0]+'|'+notes[cont2].deadline.getFullYear()+'-'+(notes[cont2].deadline.getMonth()+1)+'-'+notes[cont2].deadline.getDate()+'|'+'|'+'\n';
+				else if(notes.length>cont2 && notes[cont2].deadline.getTime() < (new Date(line[3])).getTime()){
+					newToDos += '[[01'+notes[cont2].name.substring(2,notes[cont2].name.length-3)+']]|'+notes[cont2].objective[0]+'|'+notes[cont2].status+'|'+notes[cont2].deadline.getFullYear()+'-'+(notes[cont2].deadline.getMonth()+1)+'-'+notes[cont2].deadline.getDate()+'|'+'\n';
+					notes.splice(cont2,1);
 					bandIns = true;
 					break;
 				}
@@ -148,7 +150,6 @@ export default class toDosPlugin extends Plugin {
 			}
 			if(!bandIns){
 				newToDos += toDos[i];
-				bandIns = false;
 			}
 		}// hacer test de todo
 		return newToDos;
@@ -163,7 +164,7 @@ export default class toDosPlugin extends Plugin {
 			//ademas está tomando -1 dia en las fechas en toDos no se porque
 			if (toDos[i].substring(0,1) === '#') {   //  entra a Completadas
 				notes.map((nte:Note)=>{
-					newToDos+='[[01'+nte.name.substring(2,nte.name.length-3)+']]|'+nte.objective[0]+'|'+nte.deadline.getFullYear()+'-'+(nte.deadline.getMonth()+1)+'-'+nte.deadline.getDate()+'|'+'|'+'\n';
+					newToDos+='[[01'+nte.name.substring(2,nte.name.length-3)+']]|'+nte.objective[0]+'|'+nte.status+'|'+nte.deadline.getFullYear()+'-'+(nte.deadline.getMonth()+1)+'-'+nte.deadline.getDate()+'|'+'\n';
 					if (nte.name.substring(0,2) === '10') {
 						auxNotes.push(nte);					
 					}
@@ -184,8 +185,8 @@ export default class toDosPlugin extends Plugin {
 			cont = 0;
 			let line = toDos[i].split('|');
 			while(cont<notes.length){ //  agrega las notas con prioridad de tiempo
-				if (notes[cont].deadline.getTime() < (new Date(line[2])).getTime()) {
-					newToDos += '[[01'+notes[cont].name.substring(2,notes[cont].name.length-3)+']]|'+notes[cont].objective[0]+'|'+notes[cont].deadline.getFullYear()+'-'+(notes[cont].deadline.getMonth()+1)+'-'+notes[cont].deadline.getDate()+'|'+'|'+'\n';
+				if (notes[cont].deadline.getTime() < (new Date(line[3])).getTime()) {
+					newToDos += '[[01'+notes[cont].name.substring(2,notes[cont].name.length-3)+']]|'+notes[cont].objective[0]+'|'+notes[cont].status+'|'+notes[cont].deadline.getFullYear()+'-'+(notes[cont].deadline.getMonth()+1)+'-'+notes[cont].deadline.getDate()+'|'+'\n';
 					if (notes[cont].name.substring(0,2) === '10') {
 						auxNotes.push(notes.splice(cont,1)[0]);
 					}
@@ -254,17 +255,17 @@ export default class toDosPlugin extends Plugin {
 					let reader = await this.app.vault.adapter.read("ToDo's/"+listToUpdate[i].name);
 					this.getNewTask(reader, listToUpdate[i]);
 					let newNote = this.createNewTaskNote(listToUpdate[i],reader);
-					await this.app.vault.adapter.write("ToDo's/"+listToUpdate[i].name, newNote);
-					if (listToUpdate[i].delete) {
-						this.app.vault.adapter.rename("ToDo's/"+listToUpdate[i].name, "ToDo's/"+listToUpdate[i].name.replace(/11/,'12'));
-					}
-					else{
-						this.app.vault.adapter.rename("ToDo's/"+listToUpdate[i].name, "ToDo's/"+listToUpdate[i].name.replace(/11/,'01'));
-					}
+					// await this.app.vault.adapter.write("ToDo's/"+listToUpdate[i].name, newNote);
+					// if (listToUpdate[i].delete) {
+					// 	this.app.vault.adapter.rename("ToDo's/"+listToUpdate[i].name, "ToDo's/"+listToUpdate[i].name.replace(/11/,'12'));
+					// }
+					// else{
+					// 	this.app.vault.adapter.rename("ToDo's/"+listToUpdate[i].name, "ToDo's/"+listToUpdate[i].name.replace(/11/,'01'));
+					// }
 				}
 				listToUpdate.sort(this.sortFunction)
-				await this.toDosUpdate11(listToUpdate)
-				this.app.vault.adapter.write("ToDo's.md",await this.toDosUpdate11(listToUpdate));
+				console.log(await this.toDosUpdate11(listToUpdate))
+				// this.app.vault.adapter.write("ToDo's.md",await this.toDosUpdate11(listToUpdate));
 			}
 			
 		})
