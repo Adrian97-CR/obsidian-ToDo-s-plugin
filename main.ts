@@ -1,3 +1,4 @@
+import { copyFileSync } from 'fs';
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, ListedFiles } from 'obsidian';
 
 // Remember to rename these classes and interfaces!
@@ -42,7 +43,6 @@ export default class toDosPlugin extends Plugin {
 		if(note.objective.length==0){
 			note.delete = true;
 			note.status = auxObj.replace(/!listo/,'');
-
 		}
 		let line = file.split(/\n/);
 		file = note.deadline.getFullYear()+'-'+(note.deadline.getMonth()+1)+'-'+note.deadline.getDate()+'\n'+line[1]+'\n'+act;
@@ -56,14 +56,15 @@ export default class toDosPlugin extends Plugin {
 		}
 		file += comp;
 		line.slice(i).forEach(line=>{
-			file+=line+'\n';
+			if(line.length > 3)
+				file+=line+'\n';
 		})	
 		return file;
 	}
 
 	getNewTask(reader:any, note:Note){
 		let auxTask:string[] = []
-		reader = reader.split('\n');
+		reader = reader.split('\n').slice(0,-1);
 		note.deadline = new Date(reader[0].split('-'))
 		let i = 2;
 		for (; i < reader.length; i++) {
@@ -77,15 +78,17 @@ export default class toDosPlugin extends Plugin {
 		note.status = reader[i];
 		return
 	}
+
 	sortFunction(a:Note,b:Note){
 		var dateA = a.deadline.getTime();
 		var dateB = b.deadline.getTime();
 		return dateA > dateB ? 1 : -1;  
 	};
+
 	checkCoincidence(notes:Note[],name:string, i:number):boolean
 	{
 		if (typeof notes[i] !== 'undefined') {
-			return notes[i].name.substring(0,name.length)===name || this.checkCoincidence(notes,name,i+1);
+			return notes[i].name.substring(2,name.length+2)===name || this.checkCoincidence(notes,name,i+1);
 		}
 		return false;
 	}
@@ -95,12 +98,13 @@ export default class toDosPlugin extends Plugin {
 
 
 	async toDosUpdate11(notes:Note[]) {
-		let toDos = (await this.app.vault.adapter.read("ToDo's.md")).split('\n');
+		let toDos = (await this.app.vault.adapter.read("ToDo's.md")).split('\n')
 		toDos.forEach((line:string, index)=>{toDos[index] = line+'\n'})
 		let newToDos = toDos[0]+toDos[1]+toDos[2];
 		let auxNotes:string[] = [];
 		let compTask = '';
 		let cont = 0;
+		let cont2 = 0;
 		let now = new Date(Date().replace('GMT+0000','GMT-0600'))
 		notes = notes.filter((task:Note)=>{
 			let name = task.name.substring(2,task.name.length-3);
@@ -110,60 +114,47 @@ export default class toDosPlugin extends Plugin {
 			auxNotes.push(name);
 			return !task.delete;
 		});
+		let bandIns = false;
 		for (let i = 3; true; i++) {
-			//ademas está tomando -1 dia en las fechas en toDos no se porque
 			if (toDos[i].substring(0,1) === '#') {   //  entra a Completadas
 				notes.map((nte:Note)=>{
 					newToDos+='[[01'+nte.name.substring(2,nte.name.length-3)+']]|'+nte.objective[0]+'|'+nte.deadline.getFullYear()+'-'+(nte.deadline.getMonth()+1)+'-'+nte.deadline.getDate()+'|'+'|'+'\n';
 				});
 				newToDos += toDos[i]+toDos[i+1]+toDos[i+2]+compTask;
 				i += 3; 
-				toDos.slice(i).map((line)=>{newToDos+=line});
+				toDos.slice(i).map((line)=>{
+					if(line.length>4)
+						newToDos+=line;
+				});
 				newToDos.substring(0,toDos.length-3)
 				break;
 			}
 			cont = 0;
+			cont2 = 0;
 			let line = toDos[i].split('|');
-			let auxLine = toDos[i];
-			let name = line[0].substring(4,line[0].length-2)
-			let resDel = false;
-			while(cont<auxNotes.length){
-				if (auxNotes[cont]===name) {
-					auxNotes.splice(cont,1);
-					toDos.splice(i,1);
-					i--;
-					resDel = true;
-					break;
+			let name = line[0].substring(4,line[0].length-2);
+			while((cont<auxNotes.length || cont2<notes.length)&&toDos[i].substring(0,1) !== '#'){
+				if (auxNotes.length>cont && auxNotes[cont]===name) {
+					bandIns = true;
+					break
 				}
-				else{
-					if(notes.length==0){
-						newToDos += toDos[i];
-					}
-				}
-				cont++;
-			}
-			cont = 0;
-			while(cont<notes.length){
-				if (notes[cont].deadline.getTime() < (new Date(line[2])).getTime()) {
-					resDel = false;
-					newToDos += '[[01'+notes[cont].name.substring(2,notes[cont].name.length-3)+']]|'+notes[cont].objective[0]+'|'+notes[cont].deadline.getFullYear()+'-'+(notes[cont].deadline.getMonth()+1)+'-'+notes[cont].deadline.getDate()+'|'+'|'+'\n';
-					notes.splice(cont,1);
-					cont--;
-				}
-				else {
-					if(!resDel){
-						newToDos += auxLine;
-					}
+				else if(notes.length>cont2 && notes[cont2].deadline.getTime() < (new Date(line[2])).getTime()){
+					newToDos += '[[01'+notes[cont2].name.substring(2,notes[cont2].name.length-3)+']]|'+notes[cont2].objective[0]+'|'+notes[cont2].deadline.getFullYear()+'-'+(notes[cont2].deadline.getMonth()+1)+'-'+notes[cont2].deadline.getDate()+'|'+'|'+'\n';
+					bandIns = true;
 					break;
 				}
 				cont++;
+				cont2++;
 			}
-			cont = 0;
+			if(!bandIns){
+				newToDos += toDos[i];
+				bandIns = false;
+			}
 		}// hacer test de todo
 		return newToDos;
 	}
 	async toDosUpdate00_10(notes:Note[]) {
-		let toDos = (await this.app.vault.adapter.read("ToDo's.md")).split('\n');
+		let toDos = (await this.app.vault.adapter.read("ToDo's.md")).split('\n')
 		toDos.forEach((line:string, index)=>{toDos[index] = line+'\n'})
 		let newToDos = toDos[0]+toDos[1]+toDos[2];
 		let auxNotes:Note[] = [];
@@ -180,13 +171,13 @@ export default class toDosPlugin extends Plugin {
 				newToDos = newToDos + toDos[i]+toDos[i+1]+toDos[i+2]
 				i += 3;
 				toDos = toDos.slice(i).filter((line:string)=>{
-					let spl = line.split('|');///////////////////////////////               console.log(spl[1].substring(2,spl[1].length-2))
-					let x = this.checkCoincidence(auxNotes,spl[1].substring(2,spl[1].length-2),0);
-					return !x;
+					let spl = line.split('|');
+					if(spl.length==1)return false;
+					return !this.checkCoincidence(auxNotes,spl[1].substring(4,spl[1].length-2),0);
 				});
-				console.log(toDos);
-				toDos.map((line)=>{newToDos+=line});
-				newToDos.substring(0,toDos.length-3)
+				toDos.map((line)=>{
+					newToDos+=line});
+				newToDos.substring(0,-2);
 				break;
 				
 			}
@@ -196,7 +187,7 @@ export default class toDosPlugin extends Plugin {
 				if (notes[cont].deadline.getTime() < (new Date(line[2])).getTime()) {
 					newToDos += '[[01'+notes[cont].name.substring(2,notes[cont].name.length-3)+']]|'+notes[cont].objective[0]+'|'+notes[cont].deadline.getFullYear()+'-'+(notes[cont].deadline.getMonth()+1)+'-'+notes[cont].deadline.getDate()+'|'+'|'+'\n';
 					if (notes[cont].name.substring(0,2) === '10') {
-						auxNotes.concat(notes.splice(cont,1));
+						auxNotes.push(notes.splice(cont,1)[0]);
 					}
 					else	notes.splice(cont,1);
 					cont--;
@@ -219,7 +210,7 @@ export default class toDosPlugin extends Plugin {
 			
 		}// hacer test de todo
 		console.log(newToDos);
-		return newToDos;
+		return newToDos
 	}
 
 	
@@ -228,7 +219,6 @@ export default class toDosPlugin extends Plugin {
 			let listToDos:Note[] = [];
 			let listToUpdate:Note[] = [];
 			let newTaskFileName:string[] = [];
-			let toDelete = 0;
 			reader.files.forEach((path:string) => {
 				let fileName = path.split('/')[1];
 				// Busca la tarea nueva sin insertar para insertar en todo's
@@ -264,18 +254,16 @@ export default class toDosPlugin extends Plugin {
 					let reader = await this.app.vault.adapter.read("ToDo's/"+listToUpdate[i].name);
 					this.getNewTask(reader, listToUpdate[i]);
 					let newNote = this.createNewTaskNote(listToUpdate[i],reader);
-					this.app.vault.adapter.write("ToDo's/"+listToUpdate[i].name, newNote);
+					await this.app.vault.adapter.write("ToDo's/"+listToUpdate[i].name, newNote);
 					if (listToUpdate[i].delete) {
-						toDelete++;
-						this.app.vault.adapter.rename("ToDo's/"+listToUpdate[i].name, "ToDo's/"+listToUpdate[i].name.replace(/\/11/,'/12'));
-						//actualizar contenido de la nota
+						this.app.vault.adapter.rename("ToDo's/"+listToUpdate[i].name, "ToDo's/"+listToUpdate[i].name.replace(/11/,'12'));
 					}
 					else{
-						this.app.vault.adapter.rename("ToDo's/"+listToUpdate[i].name, "ToDo's/"+listToUpdate[i].name.replace(/\/11/,'/01'));
+						this.app.vault.adapter.rename("ToDo's/"+listToUpdate[i].name, "ToDo's/"+listToUpdate[i].name.replace(/11/,'01'));
 					}
-
 				}
 				listToUpdate.sort(this.sortFunction)
+				await this.toDosUpdate11(listToUpdate)
 				this.app.vault.adapter.write("ToDo's.md",await this.toDosUpdate11(listToUpdate));
 			}
 			
@@ -335,13 +323,6 @@ export default class toDosPlugin extends Plugin {
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
-
 		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
 		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 	}
