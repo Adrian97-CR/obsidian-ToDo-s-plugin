@@ -88,7 +88,6 @@ export default class toDosPlugin extends Plugin {
 	checkCoincidence(notes:Note[],name:string, i:number):boolean
 	{
 		if (typeof notes[i] !== 'undefined') {
-			console.log(notes[i].name,name)
 			return notes[i].name===name || this.checkCoincidence(notes,name,i+1);
 		}
 		return false;
@@ -173,7 +172,6 @@ export default class toDosPlugin extends Plugin {
 				i += 3;
 				toDos = toDos.slice(i).filter((line:string)=>{
 					let spl = line.split('|');
-					console.log(line)
 					if(spl.length==1)return false;
 					return !this.checkCoincidence(auxNotes,spl[1].substring(4,spl[1].length-2),0);
 				});
@@ -211,7 +209,7 @@ export default class toDosPlugin extends Plugin {
 			
 			
 		}// hacer test de todo
-		console.log(newToDos);
+		// console.log(newToDos);
 		return newToDos
 	}
 
@@ -248,12 +246,12 @@ export default class toDosPlugin extends Plugin {
 				newTaskFileName.forEach(file => {
 					this.app.vault.adapter.rename(file, file.replace(/\/\d0/,'/01'));
 				});
-				this.app.vault.adapter.write("ToDo's.md",await this.toDosUpdate00_10(listToDos));
+				let doc = await this.toDosUpdate00_10(listToDos);
+				this.app.vault.adapter.write("ToDo's.md", doc);
 			}
 			if (listToUpdate.length != 0) {
 				for (let i = 0; i < listToUpdate.length; i++) {
 					let reader = await this.app.vault.adapter.read("ToDo's/11"+listToUpdate[i].name+'.md');
-					console.log(reader, 'reader')
 					this.getNewTask(reader, listToUpdate[i]);
 					let newNote = this.createNewTaskNote(listToUpdate[i],reader);
 					if (listToUpdate[i].delete) {
