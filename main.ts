@@ -30,9 +30,11 @@ export default class toDosPlugin extends Plugin {
 		let i = note.objective.length+2;
 		let now = new Date(Date().replace('GMT+0000','GMT-0600'))
 		let auxObj = note.objective[0];
+		let compTask:string[] = [];
 		note.objective = note.objective.filter((obj:string)=>{
 			let band = -1!=obj.search(/!listo/);
 			if(band){
+				compTask.push(obj.replace(/!listo/,'')+'|'+now.getHours()+':'+now.getMinutes());
 				comp+=obj.replace(/!listo/,'')+'|[['+now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate()+']]\n';
 			}
 			else{
@@ -58,8 +60,8 @@ export default class toDosPlugin extends Plugin {
 		line.slice(i).forEach(line=>{
 			if(line.length > 3)
 				file+=line+'\n';
-		})	
-		return file;
+		});
+		return [file,compTask.join('\n')];
 	}
 
 	getNewTask(reader:any, note:Note){
@@ -98,7 +100,6 @@ export default class toDosPlugin extends Plugin {
 
 
 	async toDosUpdate11(notes:Note[]) {
-		console.log(await this.app.vault.adapter.read("ToDo's.md"));
 		let toDos = (await this.app.vault.adapter.read("ToDo's.md")).split('\n')
 		toDos.forEach((line:string, index)=>{toDos[index] = line+'\n'})
 		let newToDos = toDos[0]+toDos[1]+toDos[2];
@@ -222,6 +223,7 @@ export default class toDosPlugin extends Plugin {
 			let listToDos:Note[] = [];
 			let listToUpdate:Note[] = [];
 			let newTaskFileName:string[] = [];
+			let compTask:string[] = [];
 			reader.files.forEach((path:string) => {
 				let fileName = path.split('/')[1];
 				// Busca la tarea nueva sin insertar para insertar en todo's
@@ -256,8 +258,8 @@ export default class toDosPlugin extends Plugin {
 				for (let i = 0; i < listToUpdate.length; i++) {
 					let reader = await this.app.vault.adapter.read("ToDo's/11"+listToUpdate[i].name+'.md');
 					this.getNewTask(reader, listToUpdate[i]);
-					let newNote = this.createNewTaskNote(listToUpdate[i],reader);
-					console.log(newNote)
+					let [newNote,aux] = this.createNewTaskNote(listToUpdate[i],reader);
+					compTask = compTask.concat(aux);
 					if (listToUpdate[i].delete) {
 						await this.app.vault.adapter.write("ToDo's/11"+listToUpdate[i].name+'.md', newNote);
 						await this.app.vault.adapter.rename("ToDo's/11"+listToUpdate[i].name+'.md', "ToDo's/12"+listToUpdate[i].name+'.md');
@@ -267,11 +269,28 @@ export default class toDosPlugin extends Plugin {
 						await this.app.vault.adapter.rename("ToDo's/11"+listToUpdate[i].name+'.md', "ToDo's/01"+listToUpdate[i].name+'.md');
 					}
 				}
+				let auxCompTask = compTask.join('\n');
+				if(auxCompTask.length>0){
+					let now = new Date(Date().replace('GMT+0000','GMT-0600'))
+					let name = now.getFullYear()+'-'+((now.getMonth()+1)<10?'0'+(now.getMonth()+1):(now.getMonth()+1))+'-'+(now.getDate()<10?'0'+now.getDate():now.getDate());
+					let daily = (await this.app.vault.adapter.read("01 Journal/01 Daily/"+name+'.md'))
+					.split('\n').filter((line:string)=>{
+						return line.length>0
+					});
+					let i = daily.length-1;
+					while(i>0){
+						if(daily[i].substring(0,1)==='#'){
+							daily.splice(i+3,0,auxCompTask);
+							break;
+						}
+						i--;
+					}
+					await this.app.vault.adapter.write("01 Journal/01 Daily/"+name+'.md', daily.join('\n'));
+				}
 				listToUpdate.sort(this.sortFunction)
 
 				let doc = await this.toDosUpdate11(listToUpdate);
 				this.app.vault.adapter.write("ToDo's.md",doc);
-				console.log(doc);
 			}
 			
 		})
