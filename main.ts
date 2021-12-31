@@ -98,6 +98,7 @@ export default class toDosPlugin extends Plugin {
 
 
 	async toDosUpdate11(notes:Note[]) {
+		console.log(await this.app.vault.adapter.read("ToDo's.md"));
 		let toDos = (await this.app.vault.adapter.read("ToDo's.md")).split('\n')
 		toDos.forEach((line:string, index)=>{toDos[index] = line+'\n'})
 		let newToDos = toDos[0]+toDos[1]+toDos[2];
@@ -136,6 +137,7 @@ export default class toDosPlugin extends Plugin {
 			bandIns = false;
 			while((cont<auxNotes.length || cont2<notes.length)&&toDos[i].substring(0,1) !== '#'){
 				if (auxNotes.length>cont && auxNotes[cont]===name) {
+					auxNotes.splice(cont,1);
 					bandIns = true;
 					break
 				}
@@ -143,6 +145,7 @@ export default class toDosPlugin extends Plugin {
 					newToDos += '[[01'+notes[cont2].name+']]|'+notes[cont2].objective[0]+'|'+notes[cont2].status+'|'+notes[cont2].deadline.getFullYear()+'-'+(notes[cont2].deadline.getMonth()+1)+'-'+notes[cont2].deadline.getDate()+'|'+'\n';
 					notes.splice(cont2,1);
 					bandIns = true;
+					i--;
 					break;
 				}
 				cont++;
@@ -254,18 +257,21 @@ export default class toDosPlugin extends Plugin {
 					let reader = await this.app.vault.adapter.read("ToDo's/11"+listToUpdate[i].name+'.md');
 					this.getNewTask(reader, listToUpdate[i]);
 					let newNote = this.createNewTaskNote(listToUpdate[i],reader);
+					console.log(newNote)
 					if (listToUpdate[i].delete) {
 						await this.app.vault.adapter.write("ToDo's/11"+listToUpdate[i].name+'.md', newNote);
-						this.app.vault.adapter.rename("ToDo's/11"+listToUpdate[i].name+'.md', "ToDo's/12"+listToUpdate[i].name+'.md');
+						await this.app.vault.adapter.rename("ToDo's/11"+listToUpdate[i].name+'.md', "ToDo's/12"+listToUpdate[i].name+'.md');
 					}
 					else{
 						await this.app.vault.adapter.write("ToDo's/11"+listToUpdate[i].name+'.md', newNote);
-						this.app.vault.adapter.rename("ToDo's/11"+listToUpdate[i].name+'.md', "ToDo's/01"+listToUpdate[i].name+'.md');
+						await this.app.vault.adapter.rename("ToDo's/11"+listToUpdate[i].name+'.md', "ToDo's/01"+listToUpdate[i].name+'.md');
 					}
 				}
 				listToUpdate.sort(this.sortFunction)
-				// console.log(await this.toDosUpdate11(listToUpdate))
-				this.app.vault.adapter.write("ToDo's.md",await this.toDosUpdate11(listToUpdate));
+
+				let doc = await this.toDosUpdate11(listToUpdate);
+				this.app.vault.adapter.write("ToDo's.md",doc);
+				console.log(doc);
 			}
 			
 		})
