@@ -213,7 +213,6 @@ export default class toDosPlugin extends Plugin {
 			
 			
 		}// hacer test de todo
-		// console.log(newToDos);
 		return newToDos
 	}
 
@@ -269,7 +268,7 @@ export default class toDosPlugin extends Plugin {
 						await this.app.vault.adapter.rename("ToDo's/11"+listToUpdate[i].name+'.md', "ToDo's/01"+listToUpdate[i].name+'.md');
 					}
 				}
-				let auxCompTask = compTask.join('\n');
+				let auxCompTask = compTask.join('\n')+'\n';
 				if(auxCompTask.length>0){
 					let now = new Date(Date().replace('GMT+0000','GMT-0600'))
 					let name = now.getFullYear()+'-'+((now.getMonth()+1)<10?'0'+(now.getMonth()+1):(now.getMonth()+1))+'-'+(now.getDate()<10?'0'+now.getDate():now.getDate());
@@ -349,8 +348,6 @@ export default class toDosPlugin extends Plugin {
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 	}
 
 	onunload() {
